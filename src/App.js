@@ -6,10 +6,13 @@ import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/analytics';
 
-import { doc, deleteDoc } from "firebase/compat/firestore";
+import { addDoc, collection, doc, updateDoc } from 'firebase/firestore';
+
+import { deleteDoc } from "firebase/compat/firestore";
 
 import { useAuthState } from 'react-firebase-hooks/auth';
 import { useCollectionData } from 'react-firebase-hooks/firestore';
+
 
 firebase.initializeApp({
   apiKey: "AIzaSyCBri9L4EQVzD8XbgGfTpbJy6Flyp73O9o",
@@ -31,6 +34,7 @@ function App() {
 
   return (
       <div className="App">
+        
         <header>
           <h1>ChatTwist</h1>
           <SignOut />
@@ -40,28 +44,42 @@ function App() {
           {user ? <ChatRoom /> : <SignIn />}
         </section>
 
+
       </div>
   );
 }
 
 function SignIn() {
-
-  const signInWithGoogle = () => {
+  const usersRef = firestore.collection('users');
+  const signInWithGoogle = async () => {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider);
+    auth.signInWithPopup(provider)
+        .then( async (result) => {
+            await usersRef.add({
+                    userid: auth.currentUser.uid
+                }
+            )
+        })
   }
 
   return (
       <>
-        <button className="sign-in" onClick={signInWithGoogle}>Sign in with Google</button>
+        <div className="center">
+          Please sign in with Google to continue
+        </div>
+
+        <div className="dud">
+          &nbsp;
+        </div>
+
+        <button className="sign-in" onClick={signInWithGoogle}>&nbsp;&nbsp;Sign in&nbsp;&nbsp;</button>
       </>
   )
-
 }
 
 function SignOut() {
   return auth.currentUser && (
-      <button className="sign-out" onClick={() => auth.signOut()}>Sign Out</button>
+      <button className="sign-out" onClick={() => auth.signOut()}>&nbsp;&nbsp;Sign Out&nbsp;&nbsp;</button>
   )
 }
 
@@ -118,13 +136,47 @@ function ChatMessage(props) {
 
   const messageClass = uid === auth.currentUser.uid ? 'sent' : 'received';
 
-  return (<>
-    <div className={`message ${messageClass}`}>
-      <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
-      <p>{text}</p>
-    </div>
-  </>)
+  if (messageClass === 'received') {
+    return (<>
+      <div className={`message ${messageClass}`}>
+        <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
+        <p>{text}</p>
+      </div>
+    </>)
+  } else
+    return (
+        <>
+
+          <div className={`message ${messageClass}`}>
+            <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
+            <p>{text}</p>
+          </div>
+
+
+        </>
+    )
 }
+
+async function counterIncrementer() {
+    let counterRef =
+        doc(firestore, "counter", "Room Counter");
+
+    let counter = await counterRef.get()
+        .then(doc => {
+            return doc.data().room_count;
+        }) .catch(err => {
+            console.log('Error 5', err);
+        });
+
+    counter = counter + 1;
+
+    const updatedData = {
+        room_count: counter
+    }
+
+    updateDoc(counterRef, updatedData);
+}
+
 
 
 export default App;
