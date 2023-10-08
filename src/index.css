@@ -84,6 +84,9 @@ form button {
   background-color: rgb(56, 56, 143);
 }
 
+.dud {
+  height: 3rem;
+}
 
 input {
   line-height: 1.5;
@@ -120,10 +123,9 @@ button:disabled {
 
 .sign-in {
   color: #282c34;
-  border: gray solid;
+  border: rgb(128, 128, 128) solid;
   background: grey;
-  max-width: 25rem;
-  margin-bottom: auto;
+  max-width: 5rem;
   margin-left: auto;
   margin-right: auto;
 }
@@ -183,6 +185,4 @@ img {
   margin-left: auto;
   margin-right: auto;
 }
-
-
 
