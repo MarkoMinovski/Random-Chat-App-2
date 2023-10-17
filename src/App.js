@@ -1,8 +1,7 @@
-import React, { useRef, useState } from 'react';
+import {useEffect, useRef, useState} from 'react';
 import './App.css';
 
-
-import firebase from 'firebase/compat/app';
+import React from 'react';
 
 import { initializeApp } from 'firebase/app';
 
@@ -11,15 +10,15 @@ import 'firebase/compat/firestore';
 import 'firebase/compat/analytics';
 
 
-import { getAuth, getAdditionalUserInfo, signInWithPopup } from 'firebase/auth';
+import { getAuth, getAdditionalUserInfo, signInWithPopup,
+    GoogleAuthProvider } from 'firebase/auth';
 
 import {collection, doc, getDocs, updateDoc, query,
-     where, getFirestore, getDoc, addDoc, setDoc } from 'firebase/firestore';
-
+     where, getFirestore, getDoc, addDoc, setDoc,
+    orderBy, limit, onSnapshot, serverTimestamp } from 'firebase/firestore';
 
 
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { useCollectionData } from 'react-firebase-hooks/firestore';
 
 
 const config = ({
@@ -37,20 +36,19 @@ initializeApp(config);
 const auth = getAuth();
 const firestore = getFirestore();
 
-let matched = false;
 
 let globalOtherUser;
-
+let globalRoomID;
 
 function App() {
 
-
-  const [user] = useAuthState(auth);
+    const [matched, setMatched] = useState(false);
+    const [user] = useAuthState(auth);
 
     let content;
 
     if (user && !matched) {
-        content = <Menu />;
+        content = <Menu setMatched={setMatched}/>;
     } else if (!user) {
         content = <SignIn />;
     } else if (user && matched) {
@@ -82,7 +80,7 @@ function App() {
 function SignIn() {
   const usersRef = collection(firestore, "users");
   const signInWithGoogle = async () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
+    const provider = new GoogleAuthProvider();
     signInWithPopup(auth, provider)
         .then( async (result) => {
             const user = getAdditionalUserInfo(result);
@@ -119,29 +117,16 @@ function SignOut() {
 
 
 function ChatMessage(props) {
-  const { text, uid, photoURL } = props.message;
+    const { text, uid, photoURL } = props.message;
 
-  const messageClass = uid === auth.currentUser.uid ? 'sent' : 'received';
+    const messageClass = uid === auth.currentUser.uid ? 'sent' : 'received';
 
-  if (messageClass === 'received') {
     return (<>
-      <div className={`message ${messageClass}`}>
-        <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
-        <p>{text}</p>
-      </div>
-    </>)
-  } else
-    return (
-        <>
-
-          <div className={`message ${messageClass}`}>
+        <div className={`message ${messageClass}`}>
             <img src={photoURL || 'https://api.adorable.io/avatars/23/abott@adorable.png'} />
             <p>{text}</p>
-          </div>
-
-
-        </>
-    )
+        </div>
+    </>)
 }
 
 async function counterIncrementer() {
@@ -166,7 +151,7 @@ async function counterIncrementer() {
 
 
 
-async function MatchUsers(user) {
+async function MatchUsers() {
 
     const query2 = query(collection(firestore, 'users'),
         where("userid", "!=", auth.currentUser.uid));
@@ -190,6 +175,7 @@ async function MatchUsers(user) {
             counter++;
     })
 
+
     const { userid } = temp;
 
     otherUser = userid;
@@ -199,8 +185,6 @@ async function MatchUsers(user) {
     globalOtherUser = otherUser;
 
     await CreateNewChatRoom();
-
-    matched = true;
 
 }
 
@@ -217,7 +201,8 @@ async function CreateNewChatRoom() {
     const userData = {
         user1: auth.currentUser.uid,
         user2: globalOtherUser,
-        createdOn: firebase.firestore.FieldValue.serverTimestamp()
+        roomNumber: counter,
+        createdOn: serverTimestamp()
     }
 
     await setDoc(doc(firestore, "rooms", "room"+counter),
@@ -243,7 +228,7 @@ async function CreateNewChatRoom() {
 
     const messageData = {
         text: '',
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
         uid,
         photoURL
     }
@@ -252,9 +237,8 @@ async function CreateNewChatRoom() {
 
 }
 
-function Menu() {
+function Menu({setMatched}) {
 
-    const [user] = useAuthState(auth);
 
     return ( <>
 
@@ -262,93 +246,136 @@ function Menu() {
                 &nbsp;
             </div>
 
-            <button className="sign-in" onClick={() => MatchUsers(user)}>
+            <button className="sign-in" onClick={() => MatchUsers()}>
             Match with someone!</button>
 
             <div className="dud">
                 &nbsp;
             </div>
 
+            <button className="sign-in" onClick={() => FindLatestRoom({setMatched})}>
+                View your latest chatroom!</button>
+
         </>
     )
 }
 
-async function DisplayLatestRoom() {
-
+async function FindLatestRoom({setMatched}) {
     const roomsCol = collection(firestore, 'rooms');
 
     const firstQuery =
-        query(roomsCol, where("user1", "==", auth.currentUser.uid));
+        query(roomsCol,
+            where("user1", "==", auth.currentUser.uid),
+            orderBy('roomNumber'),
+            limit(1));
 
     const secondQuery
-        = query(roomsCol, where("user2", "==", auth.currentUser.uid));
+        = query(roomsCol,
+        where("user2", "==", auth.currentUser.uid),
+        orderBy('roomNumber'),
+        limit(1));
     //No other way to do this that I can find. :(
+
 
     const activeSnapshot = await getDocs(firstQuery);
     const secondarySnapshot = await getDocs(secondQuery);
-    const merged = [];
 
-    activeSnapshot.forEach((doc) => {
-        merged.push(doc.data());
-    });
-    secondarySnapshot.forEach((doc) => {
-       merged.push(doc.data());
-    });
+    let max;
 
-    const [targetRoomArray] = merged.docs();
+    activeSnapshot.forEach(doc => {
+        const { roomNumber: roomNumberA } = doc.data();
+        max = roomNumberA;
+    }) //runs once - in theory.
+
+    secondarySnapshot.forEach(doc => {
+        const { roomNumber: roomNumberB } = doc.data();
+
+        if (roomNumberB > max) {
+            max = roomNumberB;
+        }
+
+    }) //also runs once - I hope
+
+
     let targetRoom = {
         id: ''
     };
 
-    let localCounter = 0;
+    targetRoom.id = "room"+max;
 
-    targetRoomArray.forEach(doc => {
-        if (localCounter === 0) {
-            targetRoom.id = doc.id;
-            localCounter++;
-        }
-    })
+    globalRoomID = targetRoom.id;
+    setMatched(true);
+}
 
-    const scrollToBottomDiv = useRef();
-    const messagesRef
-        = firestore.doc(targetRoom.id).collection('messages');
+const DisplayLatestRoom = (props) => {
 
-    const messagesQuery = messagesRef.orderBy('createdAt').limit(50);
-
-    const [messages] = useCollectionData(messagesQuery, { idField: 'id' });
-
+    const [messages, setMessages] = useState([]);
     const [formValue, setFormValue] = useState('');
+    const scrollToBottomDiv = useRef();
+
+
+    const messagesRef
+        = collection(firestore, 'rooms', globalRoomID, 'messages');
+
+    //const messagesQuery = messagesRef.orderBy('createdAt').limit(50);
+
+
+    useEffect(() => {
+        let scopedMessages = [];
+        const messagesQuery
+            = query(messagesRef, orderBy('createdAt'), limit(50));
+
+
+        const listener = onSnapshot(messagesQuery, (querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+                scopedMessages.push({...doc.data(), innerID: doc.id});
+            })
+        })
+
+        setMessages(scopedMessages);
+
+        return () => listener();
+    }, []);
 
 
     const sendMessage = async (e) => {
         e.preventDefault();
 
-        const { uid, photoURL } = auth.currentUser;
+        const {uid, photoURL} = auth.currentUser;
 
-        await messagesRef.add({
+        /*await messagesRef.add({
             text: formValue,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             uid,
             photoURL
-        })
+        })*/
+
+        const data = {
+            text: formValue,
+            createdAt: serverTimestamp(),
+            uid,
+            photoURL
+        }
+
+
+        await addDoc(messagesRef, data);
 
         setFormValue('');
-        scrollToBottomDiv.current.scrollIntoView({ behavior: 'smooth' });
+        scrollToBottomDiv.current.scrollIntoView({behavior: 'smooth'});
     }
 
     return (<>
         <main>
 
-            {messages && messages.map(msg => <ChatMessage key={msg.id} message={msg} />)}
+            {messages && messages.map(msg => <ChatMessage key={msg.id} message={msg}/>)}
 
             <span ref={scrollToBottomDiv}></span>
-
         </main>
 
         <form onSubmit={sendMessage}>
 
             <input value={formValue} onChange={(e) =>
-                setFormValue(e.target.value)} placeholder="Message..." />
+                setFormValue(e.target.value)} placeholder="Message..."/>
 
             <button type="submit" disabled={!formValue}>Send</button>
 
