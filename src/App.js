@@ -9,6 +9,8 @@ import 'firebase/compat/auth';
 import 'firebase/compat/firestore';
 import 'firebase/compat/analytics';
 
+import icon from './icon.png';
+
 
 import { getAuth, getAdditionalUserInfo, signInWithPopup,
     GoogleAuthProvider } from 'firebase/auth';
@@ -63,6 +65,7 @@ function App() {
         
         <header>
           <h1>ChatTwist</h1>
+            <img src={icon}/>
           <SignOut />
         </header>
 
@@ -320,21 +323,40 @@ const DisplayLatestRoom = (props) => {
     //const messagesQuery = messagesRef.orderBy('createdAt').limit(50);
 
 
+
     useEffect(() => {
-        let scopedMessages = [];
+
         const messagesQuery
-            = query(messagesRef, orderBy('createdAt'), limit(50));
+            = query(messagesRef, orderBy('createdAt'), limit(5000));
 
 
         const listener = onSnapshot(messagesQuery, (querySnapshot) => {
-            querySnapshot.forEach((doc) => {
-                scopedMessages.push({...doc.data(), innerID: doc.id});
-            })
+            let scopedMessages = [];
+
+                querySnapshot.forEach((doc) => {
+                    let { text } = doc.data();
+
+                    if (text === "") {
+                        console.log("Don't push this");
+                    }
+
+                    else {
+                        scopedMessages.push({...doc.data(), innerID: doc.id});
+                    }
+
+                })
+
+
+            /*else {
+                querySnapshot.docChanges().forEach((change) => {
+                        scopedMessages.push({...change.doc.data(), innerID: change.doc.id});
+                })
+            }*/
+            setMessages(scopedMessages);
         })
 
-        setMessages(scopedMessages);
-
         return () => listener();
+        //flush listener to clean up
     }, []);
 
 
@@ -380,6 +402,8 @@ const DisplayLatestRoom = (props) => {
             <button type="submit" disabled={!formValue}>Send</button>
 
         </form>
+
+
     </>)
 
 }
