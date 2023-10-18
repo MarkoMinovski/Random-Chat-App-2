@@ -304,13 +304,11 @@ async function FindLatestRoom({setMatched}) {
         id: ''
     };
 
-    if (max != null) {
-        targetRoom.id = "room"+max;
-        globalRoomID = targetRoom.id;
-        setMatched(true);
-    }
-    else
-        setMatched(false);
+
+    targetRoom.id = "room"+max;
+    globalRoomID = targetRoom.id;
+    setMatched(true);
+
 }
 
 const DisplayLatestRoom = (props) => {
