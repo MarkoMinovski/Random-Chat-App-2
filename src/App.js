@@ -269,13 +269,13 @@ async function FindLatestRoom({setMatched}) {
     const firstQuery =
         query(roomsCol,
             where("user1", "==", auth.currentUser.uid),
-            orderBy('roomNumber'),
+            orderBy('roomNumber', 'desc'),
             limit(1));
 
     const secondQuery
         = query(roomsCol,
         where("user2", "==", auth.currentUser.uid),
-        orderBy('roomNumber'),
+        orderBy('roomNumber', 'desc'),
         limit(1));
     //No other way to do this that I can find. :(
 
@@ -304,10 +304,13 @@ async function FindLatestRoom({setMatched}) {
         id: ''
     };
 
-    targetRoom.id = "room"+max;
-
-    globalRoomID = targetRoom.id;
-    setMatched(true);
+    if (max != null) {
+        targetRoom.id = "room"+max;
+        globalRoomID = targetRoom.id;
+        setMatched(true);
+    }
+    else
+        setMatched(false);
 }
 
 const DisplayLatestRoom = (props) => {
